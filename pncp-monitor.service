@@ -1,0 +1,14 @@
+[Unit]
+Description=Monitor de Licitações PNCP
+After=network.target
+
+[Service]
+Type=simple
+User=pihole
+WorkingDirectory=/home/pihole/licitacoes-3d
+ExecStart=/home/pihole/licitacoes-3d/venv/bin/python /home/pihole/licitacoes-3d/app.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
