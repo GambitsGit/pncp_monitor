@@ -170,9 +170,17 @@ class PNCPCollector:
         return score, achadas
 
     def buscar_ultimas(self, dias=30, pagina=1):
-        data_ini = (datetime.now() - timedelta(days=dias)).strftime("%Y-%m-%d")
-        url = f"{PNCP_BASE_URL}/compras/publicadas?dataInicial={data_ini}&pagina={pagina}&tamanhoPagina=50"
-        r = self.session.get(url, timeout=30)
+        data_fim = datetime.now()
+        data_ini = data_fim - timedelta(days=dias)
+
+        url = "https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao"
+        params = {
+            "dataInicial": data_ini.strftime("%Y%m%d"),
+            "dataFinal": data_fim.strftime("%Y%m%d"),
+            "pagina": pagina
+        }
+
+        r = self.session.get(url, params=params, timeout=30)
         r.raise_for_status()
         return r.json()
 
@@ -201,7 +209,7 @@ class PNCPCollector:
             "palavras_encontradas": ", ".join(palavras),
             "itens": raw.get("itens", [])
         }
-
+    
 # ------------------ APP ------------------
 
 db = DatabaseManager()
