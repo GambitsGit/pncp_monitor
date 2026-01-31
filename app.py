@@ -12,7 +12,7 @@ CORS(app)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-PNCP_BASE_URL = "https://pncp.gov.br/api/pncp/v1"
+PNCP_BASE_URL = "https://pncp.gov.br/api/consulta/v1"
 
 PALAVRAS_CHAVE = [
     'impressora 3d', 'impressora tridimensional', 'impressao 3d',
