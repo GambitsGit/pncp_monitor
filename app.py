@@ -290,74 +290,74 @@ class PNCPCollector:
             logger.error(f"Erro ao buscar licitações do órgão {cnpj}: {e}")
             return []
     
-    def criar_licitacoes_exemplo(self) -> List[Dict]:
-        """Cria licitações de exemplo para teste inicial"""
-        logger.info("Criando licitações de exemplo para teste...")
+    # def criar_licitacoes_exemplo(self) -> List[Dict]:
+    #     """Cria licitações de exemplo para teste inicial"""
+    #     logger.info("Criando licitações de exemplo para teste...")
         
-        exemplos = [
-            {
-                'anoCompra': 2024,
-                'sequencialCompra': 1,
-                'objetoCompra': 'Aquisição de impressora 3D FDM com área mínima de 300x300x400mm, filamentos PLA e ABS',
-                'orgaoEntidade': {
-                    'cnpj': '12345678000190',
-                    'razaoSocial': 'Universidade Federal de Exemplo',
-                    'poder': 'E',
-                    'esfera': 'F'
-                },
-                'unidadeOrgao': {
-                    'nomeUnidade': 'Campus Exemplo - Lab de Prototipagem'
-                },
-                'modalidadeNome': 'Pregão Eletrônico',
-                'valorTotalEstimado': 45000.00,
-                'dataPublicacaoPncp': datetime.now().isoformat(),
-                'dataAberturaProposta': (datetime.now() + timedelta(days=15)).isoformat(),
-                'dataEncerramentoProposta': (datetime.now() + timedelta(days=15, hours=4)).isoformat(),
-                'linkSistemaOrigem': 'https://pncp.gov.br'
-            },
-            {
-                'anoCompra': 2024,
-                'sequencialCompra': 2,
-                'objetoCompra': 'Contratação de serviços de impressão 3D em resina fotopolimérica para produção de protótipos',
-                'orgaoEntidade': {
-                    'cnpj': '98765432000111',
-                    'razaoSocial': 'Prefeitura Municipal de Teste',
-                    'poder': 'E',
-                    'esfera': 'M'
-                },
-                'unidadeOrgao': {
-                    'nomeUnidade': 'Secretaria de Inovação'
-                },
-                'modalidadeNome': 'Concorrência',
-                'valorTotalEstimado': 120000.00,
-                'dataPublicacaoPncp': datetime.now().isoformat(),
-                'dataAberturaProposta': (datetime.now() + timedelta(days=30)).isoformat(),
-                'dataEncerramentoProposta': (datetime.now() + timedelta(days=30, hours=3)).isoformat(),
-                'linkSistemaOrigem': 'https://pncp.gov.br'
-            },
-            {
-                'anoCompra': 2023,
-                'sequencialCompra': 3,
-                'objetoCompra': 'Aquisição de scanner 3D e filamentos PETG, TPU e Nylon para laboratório de manufatura aditiva',
-                'orgaoEntidade': {
-                    'cnpj': '11122233000144',
-                    'razaoSocial': 'Instituto Federal de Tecnologia',
-                    'poder': 'E',
-                    'esfera': 'F'
-                },
-                'unidadeOrgao': {
-                    'nomeUnidade': 'Departamento de Engenharia'
-                },
-                'modalidadeNome': 'Pregão Eletrônico',
-                'valorTotalEstimado': 75000.00,
-                'dataPublicacaoPncp': (datetime.now() - timedelta(days=60)).isoformat(),
-                'dataAberturaProposta': (datetime.now() - timedelta(days=45)).isoformat(),
-                'dataEncerramentoProposta': (datetime.now() - timedelta(days=45)).isoformat(),
-                'linkSistemaOrigem': 'https://pncp.gov.br'
-            }
-        ]
+    #     exemplos = [
+    #         {
+    #             'anoCompra': 2024,
+    #             'sequencialCompra': 1,
+    #             'objetoCompra': 'Aquisição de impressora 3D FDM com área mínima de 300x300x400mm, filamentos PLA e ABS',
+    #             'orgaoEntidade': {
+    #                 'cnpj': '12345678000190',
+    #                 'razaoSocial': 'Universidade Federal de Exemplo',
+    #                 'poder': 'E',
+    #                 'esfera': 'F'
+    #             },
+    #             'unidadeOrgao': {
+    #                 'nomeUnidade': 'Campus Exemplo - Lab de Prototipagem'
+    #             },
+    #             'modalidadeNome': 'Pregão Eletrônico',
+    #             'valorTotalEstimado': 45000.00,
+    #             'dataPublicacaoPncp': datetime.now().isoformat(),
+    #             'dataAberturaProposta': (datetime.now() + timedelta(days=15)).isoformat(),
+    #             'dataEncerramentoProposta': (datetime.now() + timedelta(days=15, hours=4)).isoformat(),
+    #             'linkSistemaOrigem': 'https://pncp.gov.br'
+    #         },
+    #         {
+    #             'anoCompra': 2024,
+    #             'sequencialCompra': 2,
+    #             'objetoCompra': 'Contratação de serviços de impressão 3D em resina fotopolimérica para produção de protótipos',
+    #             'orgaoEntidade': {
+    #                 'cnpj': '98765432000111',
+    #                 'razaoSocial': 'Prefeitura Municipal de Teste',
+    #                 'poder': 'E',
+    #                 'esfera': 'M'
+    #             },
+    #             'unidadeOrgao': {
+    #                 'nomeUnidade': 'Secretaria de Inovação'
+    #             },
+    #             'modalidadeNome': 'Concorrência',
+    #             'valorTotalEstimado': 120000.00,
+    #             'dataPublicacaoPncp': datetime.now().isoformat(),
+    #             'dataAberturaProposta': (datetime.now() + timedelta(days=30)).isoformat(),
+    #             'dataEncerramentoProposta': (datetime.now() + timedelta(days=30, hours=3)).isoformat(),
+    #             'linkSistemaOrigem': 'https://pncp.gov.br'
+    #         },
+    #         {
+    #             'anoCompra': 2023,
+    #             'sequencialCompra': 3,
+    #             'objetoCompra': 'Aquisição de scanner 3D e filamentos PETG, TPU e Nylon para laboratório de manufatura aditiva',
+    #             'orgaoEntidade': {
+    #                 'cnpj': '11122233000144',
+    #                 'razaoSocial': 'Instituto Federal de Tecnologia',
+    #                 'poder': 'E',
+    #                 'esfera': 'F'
+    #             },
+    #             'unidadeOrgao': {
+    #                 'nomeUnidade': 'Departamento de Engenharia'
+    #             },
+    #             'modalidadeNome': 'Pregão Eletrônico',
+    #             'valorTotalEstimado': 75000.00,
+    #             'dataPublicacaoPncp': (datetime.now() - timedelta(days=60)).isoformat(),
+    #             'dataAberturaProposta': (datetime.now() - timedelta(days=45)).isoformat(),
+    #             'dataEncerramentoProposta': (datetime.now() - timedelta(days=45)).isoformat(),
+    #             'linkSistemaOrigem': 'https://pncp.gov.br'
+    #         }
+    #     ]
         
-        return exemplos
+    #     return exemplos
     
     def processar_licitacao(self, licitacao_raw: Dict) -> Dict:
         """Processa e normaliza dados de uma licitação"""
@@ -602,7 +602,7 @@ if __name__ == '__main__':
     print("\n✓ Servidor iniciado com sucesso!")
     print(f"\n📍 Acesse: http://localhost:5000")
     print(f"📍 Rede local: http://[seu-ip]:5000")
-    print("\n⚠️  NOTA: Usando dados de exemplo inicialmente")
+    # print("\n⚠️  NOTA: Usando dados de exemplo inicialmente")
     print("   A integração com a API real do PNCP será feita após testes\n")
     print("="*60 + "\n")
     
