@@ -1,3 +1,12 @@
+coleta_status = {
+    "rodando": False,
+    "uf_atual": None,
+    "pagina": 0,
+    "total_processadas": 0,
+    "relevantes": 0,
+    "mensagem": ""
+}
+
 from flask import Flask, render_template, jsonify, request
 from flask_cors import CORS
 import requests
@@ -169,7 +178,7 @@ class PNCPCollector:
                 score += 5
         return score, achadas
 
-    def buscar_ultimas(self, dias=30, pagina=1):
+    def buscar_ultimas(self, dias=30, pagina=1, uf="SP"):
         data_fim = datetime.now()
         data_ini = data_fim - timedelta(days=dias)
 
@@ -177,7 +186,8 @@ class PNCPCollector:
         params = {
             "dataInicial": data_ini.strftime("%Y%m%d"),
             "dataFinal": data_fim.strftime("%Y%m%d"),
-            "pagina": pagina
+            "pagina": pagina,
+            "uf": uf
         }
 
         r = self.session.get(url, params=params, timeout=30)
@@ -187,6 +197,15 @@ class PNCPCollector:
     def processar(self, raw):
         objeto = raw.get("objetoCompra", "")
         score, palavras = self.calcular_relevancia(objeto)
+
+        data_enc = raw.get("dataEncerramentoProposta")
+        situacao = "aberta"
+        if data_enc:
+            try:
+                if datetime.fromisoformat(data_enc[:10]) < datetime.now():
+                    situacao = "encerrada"
+            except:
+                pass
 
         return {
             "numero_controlpncp": f"{raw.get('anoCompra')}-{raw.get('sequencialCompra')}",
@@ -200,15 +219,16 @@ class PNCPCollector:
             "modalidade": raw.get("modalidadeNome"),
             "objeto_compra": objeto,
             "valor_total": raw.get("valorTotalEstimado", 0),
-            "situacao": "aberta",
+            "situacao": situacao,
             "data_publicacao": (raw.get("dataPublicacaoPncp") or "")[:10],
             "data_abertura_propostas": raw.get("dataAberturaProposta"),
-            "data_encerramento_propostas": raw.get("dataEncerramentoProposta"),
+            "data_encerramento_propostas": data_enc,
             "link_sistema_origem": raw.get("linkSistemaOrigem"),
             "relevancia_score": score,
             "palavras_encontradas": ", ".join(palavras),
             "itens": raw.get("itens", [])
         }
+
     
 # ------------------ APP ------------------
 
@@ -223,28 +243,38 @@ def index():
 def coletar():
     try:
         body = request.json or {}
-        dias = body.get("dias", 30)
+        dias = body.get("dias", 365)  # padrão: 1 ano
+
+        UFS = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
+               "PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"]
 
         total = 0
         relevantes = 0
 
-        pagina = 1
-        while True:
-            data = collector.buscar_ultimas(dias, pagina)
-            compras = data.get("data", [])
-            if not compras:
-                break
+        for uf in UFS:
+            logger.info(f"Coletando UF {uf}...")
+            pagina = 1
 
-            for c in compras:
-                total += 1
-                lic = collector.processar(c)
-                if lic["relevancia_score"] > 0:
-                    if db.salvar_licitacao(lic):
-                        relevantes += 1
+            while True:
+                data = collector.buscar_ultimas(dias=dias, pagina=pagina, uf=uf)
 
-            pagina += 1
-            if pagina > 5:
-                break
+                compras = data.get("data") or data.get("items") or []
+                if not compras:
+                    break
+
+                for c in compras:
+                    total += 1
+                    lic = collector.processar(c)
+
+                    if lic["relevancia_score"] > 0:
+                        if db.salvar_licitacao(lic):
+                            relevantes += 1
+
+                logger.info(f"UF {uf} página {pagina} processada ({len(compras)} registros)")
+                pagina += 1
+
+                if pagina > 20:  # limite de segurança por UF
+                    break
 
         db.registrar_coleta(total, relevantes, "sucesso")
 
