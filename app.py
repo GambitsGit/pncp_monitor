@@ -1,247 +1,311 @@
-"""
-Sistema de Monitoramento de Licitações PNCP
-Foco: Impressão 3D (equipamentos, insumos e serviços)
-Autor: você 😄
-"""
-
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, render_template, jsonify, request
 from flask_cors import CORS
 import requests
+from datetime import datetime, timedelta
 import sqlite3
 import json
 import logging
-from datetime import datetime, timedelta
-
-# =============================
-# CONFIGURAÇÕES GERAIS
-# =============================
-
-PNCP_BASE_URL = "https://pncp.gov.br/api/pncp/v1"
-DB_PATH = "licitacoes.db"
-
-PALAVRAS_CHAVE = [
-    "impressora 3d", "impressao 3d", "impressora tridimensional",
-    "fdm", "fff", "resina", "sla", "dlp", "lcd",
-    "filamento", "pla", "abs", "petg", "tpu", "nylon",
-    "scanner 3d", "manufatura aditiva", "fabricacao aditiva",
-    "modelagem 3d", "prototipagem", "cad 3d"
-]
-
-# =============================
-# APP / LOG
-# =============================
 
 app = Flask(__name__)
 CORS(app)
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("PNCP")
+logger = logging.getLogger(__name__)
 
-# =============================
-# BANCO DE DADOS
-# =============================
+PNCP_BASE_URL = "https://pncp.gov.br/api/pncp/v1"
 
-class Database:
-    def __init__(self):
-        self.init_db()
+PALAVRAS_CHAVE = [
+    'impressora 3d', 'impressora tridimensional', 'impressao 3d',
+    'impressao tridimensional', 'printer 3d', 'prototipagem rapida',
+    'fdm', 'fff', 'resina', 'sla', 'dlp', 'lcd',
+    'filamento', 'pla', 'abs', 'petg', 'tpu', 'nylon',
+    'resina fotopolimerica', 'scanner 3d',
+    'modelagem 3d', 'manufatura aditiva', 'fabricacao aditiva'
+]
 
-    def connect(self):
-        conn = sqlite3.connect(DB_PATH)
+# ------------------ BANCO ------------------
+
+class DatabaseManager:
+    def __init__(self, db_path='licitacoes.db'):
+        self.db_path = db_path
+        self.init_database()
+
+    def get_connection(self):
+        conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         return conn
 
-    def init_db(self):
-        conn = self.connect()
+    def init_database(self):
+        conn = self.get_connection()
         cur = conn.cursor()
 
         cur.execute("""
-            CREATE TABLE IF NOT EXISTS licitacoes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                numero TEXT UNIQUE,
-                orgao TEXT,
-                objeto TEXT,
-                modalidade TEXT,
-                valor REAL,
-                situacao TEXT,
-                data_publicacao TEXT,
-                link TEXT,
-                score INTEGER,
-                palavras TEXT,
-                visualizado INTEGER DEFAULT 0,
-                criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
+        CREATE TABLE IF NOT EXISTS licitacoes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            numero_controlpncp TEXT UNIQUE,
+            ano INTEGER,
+            sequencial INTEGER,
+            orgao_cnpj TEXT,
+            orgao_nome TEXT,
+            orgao_poder TEXT,
+            orgao_esfera TEXT,
+            unidade_nome TEXT,
+            modalidade TEXT,
+            objeto_compra TEXT,
+            valor_total REAL,
+            situacao TEXT,
+            data_publicacao TEXT,
+            data_abertura_propostas TEXT,
+            data_encerramento_propostas TEXT,
+            link_sistema_origem TEXT,
+            relevancia_score REAL,
+            palavras_encontradas TEXT,
+            itens_json TEXT,
+            data_coleta TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            visualizado INTEGER DEFAULT 0,
+            observacoes TEXT
+        )
         """)
 
         cur.execute("""
-            CREATE TABLE IF NOT EXISTS coletas (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                total INTEGER,
-                relevantes INTEGER,
-                status TEXT,
-                criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
+        CREATE TABLE IF NOT EXISTS historico_coletas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            data_coleta TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            total_encontradas INTEGER,
+            total_relevantes INTEGER,
+            status TEXT
+        )
         """)
 
         conn.commit()
         conn.close()
-        logger.info("Banco de dados pronto")
 
-    def salvar_licitacao(self, data):
-        conn = self.connect()
+    def salvar_licitacao(self, l):
+        conn = self.get_connection()
         cur = conn.cursor()
         try:
             cur.execute("""
-                INSERT OR IGNORE INTO licitacoes
-                (numero, orgao, objeto, modalidade, valor, situacao,
-                 data_publicacao, link, score, palavras)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT OR IGNORE INTO licitacoes
+            (numero_controlpncp, ano, sequencial, orgao_cnpj, orgao_nome, orgao_poder, orgao_esfera,
+             unidade_nome, modalidade, objeto_compra, valor_total, situacao, data_publicacao,
+             data_abertura_propostas, data_encerramento_propostas, link_sistema_origem,
+             relevancia_score, palavras_encontradas, itens_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                data["numero"],
-                data["orgao"],
-                data["objeto"],
-                data["modalidade"],
-                data["valor"],
-                data["situacao"],
-                data["data_publicacao"],
-                data["link"],
-                data["score"],
-                data["palavras"]
+                l['numero_controlpncp'], l['ano'], l['sequencial'], l['orgao_cnpj'], l['orgao_nome'],
+                l['orgao_poder'], l['orgao_esfera'], l['unidade_nome'], l['modalidade'],
+                l['objeto_compra'], l['valor_total'], l['situacao'], l['data_publicacao'],
+                l['data_abertura_propostas'], l['data_encerramento_propostas'], l['link_sistema_origem'],
+                l['relevancia_score'], l['palavras_encontradas'], json.dumps(l['itens'])
             ))
             conn.commit()
-            return cur.rowcount > 0
+            return True
         except Exception as e:
-            logger.error(f"Erro DB: {e}")
+            logger.error(e)
             return False
         finally:
             conn.close()
 
-    def listar_licitacoes(self):
-        conn = self.connect()
+    def buscar_licitacoes(self, filtros=None):
+        conn = self.get_connection()
         cur = conn.cursor()
-        cur.execute("SELECT * FROM licitacoes ORDER BY data_publicacao DESC")
+        query = "SELECT * FROM licitacoes WHERE 1=1"
+        params = []
+
+        if filtros:
+            if filtros.get("situacao"):
+                query += " AND situacao=?"
+                params.append(filtros["situacao"])
+            if filtros.get("busca"):
+                query += " AND (objeto_compra LIKE ? OR orgao_nome LIKE ?)"
+                b = f"%{filtros['busca']}%"
+                params.extend([b, b])
+
+        query += " ORDER BY data_publicacao DESC"
+        cur.execute(query, params)
         rows = cur.fetchall()
         conn.close()
         return [dict(r) for r in rows]
 
     def registrar_coleta(self, total, relevantes, status):
-        conn = self.connect()
+        conn = self.get_connection()
         cur = conn.cursor()
-        cur.execute("""
-            INSERT INTO coletas (total, relevantes, status)
-            VALUES (?, ?, ?)
-        """, (total, relevantes, status))
+        cur.execute(
+            "INSERT INTO historico_coletas (total_encontradas, total_relevantes, status) VALUES (?, ?, ?)",
+            (total, relevantes, status)
+        )
         conn.commit()
         conn.close()
 
-db = Database()
+    def marcar_visualizado(self, id):
+        conn = self.get_connection()
+        cur = conn.cursor()
+        cur.execute("UPDATE licitacoes SET visualizado=1 WHERE id=?", (id,))
+        conn.commit()
+        conn.close()
 
-# =============================
-# COLETOR PNCP
-# =============================
+    def adicionar_observacao(self, id, obs):
+        conn = self.get_connection()
+        cur = conn.cursor()
+        cur.execute("UPDATE licitacoes SET observacoes=? WHERE id=?", (obs, id))
+        conn.commit()
+        conn.close()
+
+# ------------------ COLETOR ------------------
 
 class PNCPCollector:
     def __init__(self):
         self.session = requests.Session()
-        self.session.headers.update({
-            "Accept": "application/json",
-            "User-Agent": "PNCP-Monitor"
-        })
 
     def calcular_relevancia(self, texto):
-        texto = texto.lower()
+        if not texto:
+            return 0, []
+        t = texto.lower()
         score = 0
         achadas = []
-
         for p in PALAVRAS_CHAVE:
-            if p in texto:
+            if p in t:
                 achadas.append(p)
-                score += 5 if "impressora" in p else 2
-
+                score += 5
         return score, achadas
 
-    def buscar_recentes(self, dias=7):
-        data_fim = datetime.now().strftime("%Y-%m-%d")
+    def buscar_ultimas(self, dias=30, pagina=1):
         data_ini = (datetime.now() - timedelta(days=dias)).strftime("%Y-%m-%d")
+        url = f"{PNCP_BASE_URL}/compras/publicadas?dataInicial={data_ini}&pagina={pagina}&tamanhoPagina=50"
+        r = self.session.get(url, timeout=30)
+        r.raise_for_status()
+        return r.json()
 
-        endpoint = f"{PNCP_BASE_URL}/contratacoes/publicacao"
-        params = {
-            "pagina": 1,
-            "tamanhoPagina": 50,
-            "dataInicial": data_ini,
-            "dataFinal": data_fim
-        }
-
-        try:
-            r = self.session.get(endpoint, params=params, timeout=30)
-            r.raise_for_status()
-            return r.json().get("data", [])
-        except Exception as e:
-            logger.error(f"Erro PNCP: {e}")
-            return []
-
-    def normalizar(self, raw):
+    def processar(self, raw):
         objeto = raw.get("objetoCompra", "")
         score, palavras = self.calcular_relevancia(objeto)
 
-        if score == 0:
-            return None
-
         return {
-            "numero": f'{raw.get("anoCompra")}-{raw.get("sequencialCompra")}',
-            "orgao": raw.get("orgaoEntidade", {}).get("razaoSocial"),
-            "objeto": objeto,
+            "numero_controlpncp": f"{raw.get('anoCompra')}-{raw.get('sequencialCompra')}",
+            "ano": raw.get("anoCompra"),
+            "sequencial": raw.get("sequencialCompra"),
+            "orgao_cnpj": raw.get("orgaoEntidade", {}).get("cnpj"),
+            "orgao_nome": raw.get("orgaoEntidade", {}).get("razaoSocial"),
+            "orgao_poder": raw.get("orgaoEntidade", {}).get("poder"),
+            "orgao_esfera": raw.get("orgaoEntidade", {}).get("esfera"),
+            "unidade_nome": raw.get("unidadeOrgao", {}).get("nomeUnidade"),
             "modalidade": raw.get("modalidadeNome"),
-            "valor": raw.get("valorTotalEstimado", 0),
+            "objeto_compra": objeto,
+            "valor_total": raw.get("valorTotalEstimado", 0),
             "situacao": "aberta",
-            "data_publicacao": raw.get("dataPublicacaoPncp", "")[:10],
-            "link": raw.get("linkSistemaOrigem"),
-            "score": score,
-            "palavras": ", ".join(palavras)
+            "data_publicacao": (raw.get("dataPublicacaoPncp") or "")[:10],
+            "data_abertura_propostas": raw.get("dataAberturaProposta"),
+            "data_encerramento_propostas": raw.get("dataEncerramentoProposta"),
+            "link_sistema_origem": raw.get("linkSistemaOrigem"),
+            "relevancia_score": score,
+            "palavras_encontradas": ", ".join(palavras),
+            "itens": raw.get("itens", [])
         }
 
-collector = PNCPCollector()
+# ------------------ APP ------------------
 
-# =============================
-# ROTAS
-# =============================
+db = DatabaseManager()
+collector = PNCPCollector()
 
 @app.route("/")
 def index():
-    return "<h2>PNCP Monitor ativo 🚀</h2>"
+    return render_template("index.html")
 
 @app.route("/api/coletar", methods=["POST"])
 def coletar():
     try:
-        logger.info("Coletando PNCP...")
-        raws = collector.buscar_recentes()
-        total = len(raws)
+        body = request.json or {}
+        dias = body.get("dias", 30)
+
+        total = 0
         relevantes = 0
 
-        for r in raws:
-            lic = collector.normalizar(r)
-            if lic and db.salvar_licitacao(lic):
-                relevantes += 1
+        pagina = 1
+        while True:
+            data = collector.buscar_ultimas(dias, pagina)
+            compras = data.get("data", [])
+            if not compras:
+                break
+
+            for c in compras:
+                total += 1
+                lic = collector.processar(c)
+                if lic["relevancia_score"] > 0:
+                    if db.salvar_licitacao(lic):
+                        relevantes += 1
+
+            pagina += 1
+            if pagina > 5:
+                break
 
         db.registrar_coleta(total, relevantes, "sucesso")
 
         return jsonify({
             "success": True,
-            "total": total,
-            "relevantes": relevantes
+            "total_encontradas": total,
+            "total_relevantes": relevantes,
+            "mensagem": f"Coleta concluída! {relevantes} licitações relevantes encontradas."
         })
+
     except Exception as e:
-        db.registrar_coleta(0, 0, "erro")
+        logger.error(e)
+        db.registrar_coleta(0, 0, str(e))
         return jsonify({"success": False, "erro": str(e)}), 500
 
 @app.route("/api/licitacoes")
 def listar():
-    return jsonify(db.listar_licitacoes())
+    filtros = {
+        "situacao": request.args.get("situacao"),
+        "busca": request.args.get("busca"),
+    }
+    filtros = {k: v for k, v in filtros.items() if v}
+    lic = db.buscar_licitacoes(filtros)
+    return jsonify({"success": True, "total": len(lic), "licitacoes": lic})
 
-# =============================
-# MAIN
-# =============================
+@app.route("/api/licitacoes/<int:id>")
+def obter(id):
+    conn = db.get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM licitacoes WHERE id=?", (id,))
+    row = cur.fetchone()
+    conn.close()
+    if not row:
+        return jsonify({"success": False, "erro": "Não encontrada"}), 404
+
+    db.marcar_visualizado(id)
+    return jsonify({"success": True, "licitacao": dict(row)})
+
+@app.route("/api/licitacoes/<int:id>/observacao", methods=["POST"])
+def obs(id):
+    obs = (request.json or {}).get("observacao", "")
+    db.adicionar_observacao(id, obs)
+    return jsonify({"success": True})
+
+@app.route("/api/estatisticas")
+def stats():
+    conn = db.get_connection()
+    cur = conn.cursor()
+
+    cur.execute("SELECT COUNT(*) as t FROM licitacoes")
+    total = cur.fetchone()["t"]
+
+    cur.execute("SELECT situacao, COUNT(*) as q FROM licitacoes GROUP BY situacao")
+    por = {r["situacao"]: r["q"] for r in cur.fetchall()}
+
+    cur.execute("SELECT COUNT(*) as t FROM licitacoes WHERE visualizado=0")
+    novas = cur.fetchone()["t"]
+
+    conn.close()
+
+    return jsonify({
+        "success": True,
+        "estatisticas": {
+            "total_licitacoes": total,
+            "por_situacao": por,
+            "nao_visualizadas": novas
+        }
+    })
 
 if __name__ == "__main__":
-    print("\nPNCP Monitor iniciado")
-    print("http://localhost:5000\n")
+    print("Rodando em http://0.0.0.0:5000")
     app.run(host="0.0.0.0", port=5000, debug=True)
